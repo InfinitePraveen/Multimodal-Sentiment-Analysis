@@ -1,0 +1,40 @@
+{
+  "deployed": "late fusion",
+  "sizes": {
+    "train": 389,
+    "val": 49,
+    "test": 49
+  },
+  "models": [
+    {
+      "model": "text only",
+      "val_macro_f1": 0.358,
+      "test_accuracy": 0.633,
+      "test_macro_f1": 0.512
+    },
+    {
+      "model": "image only",
+      "val_macro_f1": 0.519,
+      "test_accuracy": 0.51,
+      "test_macro_f1": 0.442
+    },
+    {
+      "model": "early fusion (LR)",
+      "val_macro_f1": 0.461,
+      "test_accuracy": 0.531,
+      "test_macro_f1": 0.464
+    },
+    {
+      "model": "early fusion (MLP)",
+      "val_macro_f1": 0.386,
+      "test_accuracy": 0.612,
+      "test_macro_f1": 0.511
+    },
+    {
+      "model": "late fusion",
+      "val_macro_f1": 0.542,
+      "test_accuracy": 0.51,
+      "test_macro_f1": 0.442
+    }
+  ]
+}
