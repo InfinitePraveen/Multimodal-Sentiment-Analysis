@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multimodal Sentiment Analysis</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-row">
+    <div>
+      <h1>Multimodal Sentiment Analysis</h1>
+      <p class="sub">Tweet text + tweet image &rarr; positive, negative or neutral</p>
+    </div>
+    <nav class="links">
+      <a href="{{ github }}" target="_blank" rel="noopener">GitHub</a>
+      <a href="{{ linkedin }}" target="_blank" rel="noopener">LinkedIn</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  {% if error_model %}
+  <div class="notice warn">{{ error_model }}</div>
+  {% endif %}
+
+  <section class="grid">
+    <div class="card">
+      <h2>Try it</h2>
+
+      {% if message %}
+      <div class="notice warn">{{ message }}</div>
+      {% endif %}
+
+      <form action="{{ url_for('do_predict') }}" method="post" enctype="multipart/form-data">
+        <label for="text">Tweet text</label>
+        <textarea id="text" name="text" rows="4" maxlength="500" placeholder="e.g. Beautiful sunset after a long week, feeling grateful">{{ text_value }}</textarea>
+
+        <label for="image">Image</label>
+        <input id="image" type="file" name="image" accept="image/*">
+        <input type="hidden" name="sample_id" value="{{ sample_id }}">
+
+        {% if preview %}
+        <div class="preview"><img src="{{ preview }}" alt="image used for the prediction"></div>
+        {% endif %}
+
+        <button type="submit" {% if error_model %}disabled{% endif %}>Analyse</button>
+        <p class="hint">Give both for the fused prediction. With only one of them the app falls back to that single model.</p>
+      </form>
+
+      {% if samples %}
+      <h3>Examples from the test split</h3>
+      <div class="samples">
+        {% for s in samples %}
+        <a href="{{ url_for('index', sample=s.id) }}" class="sample" title="{{ s.text }}">
+          <img src="{{ url_for('static', filename='samples/' ~ s.id ~ '.jpg') }}" alt="">
+        </a>
+        {% endfor %}
+      </div>
+      <p class="hint">Click one to fill the form, then press Analyse.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Result</h2>
+      {% if result %}
+        <p class="mode">Mode: <strong>{{ result.mode }}</strong></p>
+        <div class="verdict {{ result.final.top }}">
+          {{ result.final.top }} <span>{{ result.final.top_pct }}%</span>
+        </div>
+
+        {% macro bars(block, title) %}
+          <h3>{{ title }}</h3>
+          {% for r in block.rows %}
+          <div class="bar-row">
+            <span class="bar-label">{{ r.label }}</span>
+            <div class="bar"><div class="fill {{ r.label }}" style="width: {{ r.pct }}%"></div></div>
+            <span class="bar-pct">{{ r.pct }}%</span>
+          </div>
+          {% endfor %}
+        {% endmacro %}
+
+        {{ bars(result.final, 'Final prediction (' ~ result.mode ~ ')') }}
+        {% if result.mode == 'fusion' %}
+          {{ bars(result.text, 'Text model alone') }}
+          {{ bars(result.image, 'Image model alone') }}
+          <p class="hint">When the two single models disagree, the fused prediction shows how the combined model settles it.</p>
+        {% endif %}
+      {% else %}
+        <p class="muted">Nothing yet. Write a tweet, add an image (or click an example) and press Analyse.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><strong>Text</strong> is cleaned and turned into TF-IDF features.</li>
+      <li><strong>Image</strong> goes through a pretrained MobileNetV3-small; the 576-number vector before the classifier is kept.</li>
+      <li><strong>Fusion</strong> combines both: either one classifier on the joined vectors (early fusion) or a weighted average of two per-modality models (late fusion). Whichever scored best on the validation set is used here.</li>
+    </ol>
+    <p class="muted">Everything runs on CPU. Trained on MVSA-Single (Twitter image-text pairs, Niu et al. 2016).</p>
+  </section>
+
+  {% if metrics %}
+  <section class="card">
+    <h2>Model comparison (test split)</h2>
+    <p class="muted">Deployed: <strong>{{ metrics.deployed }}</strong> &middot;
+      train {{ metrics.sizes.train }} / val {{ metrics.sizes.val }} / test {{ metrics.sizes.test }} tweets</p>
+    <table>
+      <thead><tr><th>Model</th><th>Val macro-F1</th><th>Test accuracy</th><th>Test macro-F1</th></tr></thead>
+      <tbody>
+      {% for m in metrics.models %}
+        <tr {% if m.model == metrics.deployed %}class="picked"{% endif %}>
+          <td>{{ m.model }}</td>
+          <td>{{ '%.3f' % m.val_macro_f1 }}</td>
+          <td>{{ '%.3f' % m.test_accuracy }}</td>
+          <td>{{ '%.3f' % m.test_macro_f1 }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div class="plots">
+      {% if has_comparison %}<img src="{{ url_for('static', filename='model_comparison.png') }}" alt="model comparison chart">{% endif %}
+      {% if has_confusion %}<img src="{{ url_for('static', filename='confusion_matrix.png') }}" alt="confusion matrix">{% endif %}
+    </div>
+    <p class="muted">Labels in MVSA are noisy (one annotator per tweet), so treat these numbers as a small-scale demo, not a benchmark.</p>
+  </section>
+  {% endif %}
+
+</main>
+
+<footer>
+  <div class="wrap">
+    Built by Praveen &middot;
+    <a href="{{ github }}" target="_blank" rel="noopener">GitHub: InfinitePraveen</a> &middot;
+    <a href="{{ linkedin }}" target="_blank" rel="noopener">LinkedIn: infinitepraveen</a>
+  </div>
+</footer>
+
+</body>
+</html>
