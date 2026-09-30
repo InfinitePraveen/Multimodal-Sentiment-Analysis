@@ -1,87 +1,98 @@
 # Multimodal Sentiment Analysis
 
-A lightweight multimodal sentiment analysis project that combines text and image information from social media-style posts. The project uses a simple feature-fusion approach that can run on a CPU-only machine.
+Predict the sentiment (positive / negative / neutral) of a social media post from **both** its text and its image.
+The project compares single-modality models with early and late fusion, and comes with a small Flask app so the
+model can be tried out live.
 
-## Project Overview
+Skills touched: multimodal learning, vision-language features, fusion models, end-to-end ML pipeline, Flask.
 
-This project demonstrates how text and visual features can be combined to predict sentiment. Instead of using a large vision-language model, it uses compact pretrained/lightweight components so the complete workflow is practical on a normal laptop.
+I built this to run on an ordinary laptop: no GPU, and not much disk space.
 
-**Dataset:** [MVSA-Single](https://mcrlab.net/research/mvsa-sentiment-analysis-on-multi-view-social-media/)  
-**Approach:** TF-IDF text features + lightweight image color/edge features + Logistic Regression fusion.
+## How it works
 
-The notebook downloads only the required public files when possible and stores them under `data/`.
-
-## Repository Structure
-
-```text
-Multimodal-Sentiment-Analysis/
-├── data/
-│   └── README.md
-├── models/
-│   └── README.md
-├── Multimodal_Sentiment_Analysis.ipynb
-├── app.py
-├── requirements.txt
-├── .gitignore
-├── CONTRIBUTING.md
-├── CHANGELOG.md
-└── README.md
+```
+tweet text  -> clean -> TF-IDF ------------------------+
+                                                       +--> fusion --> positive / negative / neutral
+tweet image -> MobileNetV3-small (frozen) -> 576-d ----+
 ```
 
-No `src/`, preprocessing module, or extra training script is used. The notebook contains the complete experiment and training workflow.
+* Text features: TF-IDF with 1-2 word n-grams.
+* Image features: a frozen, pretrained MobileNetV3-small (about 10 MB). Nothing is fine-tuned, it is one forward pass per image on CPU.
+* Fusion strategies compared in notebook 03:
+  1. text only
+  2. image only
+  3. early fusion: concatenate both vectors, then logistic regression or a small MLP
+  4. late fusion: weighted average of the two per-modality probabilities
+* The fusion model with the best validation macro-F1 is saved and used by the web app.
+  If only text or only an image is given, the app falls back to the matching single model.
 
-## How It Works
+## Data
 
-1. Load social media posts containing text and associated images.
-2. Convert text into TF-IDF features.
-3. Extract compact image statistics such as color histograms and edge density.
-4. Normalize both modalities.
-5. Concatenate the text and image representations.
-6. Train a lightweight Logistic Regression classifier.
-7. Compare text-only, image-only, and fused predictions.
-8. Save the trained artifacts for the Flask demo.
+MVSA-Single (Niu et al., *Sentiment Analysis on Multi-View Social Data*, MMM 2016): about 5k tweets, each with one
+image and a positive / negative / neutral label. The notebook downloads a community copy from the Hugging Face Hub
+(`xwycyj/MVSA-Single`). The data is for research use and is not part of this repo.
 
-## Run the Notebook
+The zip is ~211 MB. It is read directly from the zip, never extracted.
+
+## Repository layout
+
+```
+notebooks/
+  01_data_download_and_eda.ipynb      download, labels, cleaning, split, quick EDA
+  02_image_features.ipynb             MobileNetV3-small embeddings for every image
+  03_text_features_and_fusion.ipynb   TF-IDF, fusion models, comparison, save the best one
+app.py                                Flask demo
+templates/  static/                   page + css (plots and demo examples end up in static/ too)
+data/  models/                        filled by the notebooks (git-ignored)
+```
+
+## Run it
+
+Python 3.9 - 3.12.
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate
+# Windows: .venv\Scripts\activate      Linux / macOS: source .venv/bin/activate
 pip install -r requirements.txt
 jupyter notebook
 ```
 
-Open `Multimodal_Sentiment_Analysis.ipynb` and run the cells from top to bottom.
-
-## Run the Web App
-
-After running the notebook and creating the model artifacts:
+1. Run the notebooks in `notebooks/` in order: 01 -> 02 -> 03.
+   Roughly: 01 is dominated by the 211 MB download, 02 takes a few minutes on a CPU, 03 takes a minute or two.
+2. Start the app from the repo root:
 
 ```bash
 python app.py
 ```
 
-Open:
+Open http://127.0.0.1:5000. The first start downloads the MobileNet weights (~10 MB) once.
 
-```text
-http://127.0.0.1:5000
-```
+### Keeping disk usage small
 
-The web app accepts text and an optional image and displays the predicted sentiment.
+* `requirements.txt` points pip at the CPU-only PyTorch wheels. That avoids the multi-GB CUDA packages on Linux.
+* Once notebook 02 has finished you can delete `data/data.zip` (211 MB). The app only needs `models/` and `static/`.
+* Nothing else is large: features are a few MB, the saved model is a few MB.
 
-## Interview Talking Points
+## Results
 
-- Why multimodal learning can capture information missed by text alone.
-- Early feature fusion versus independent modality models.
-- Why TF-IDF is useful as a CPU-friendly baseline.
-- Why image statistics are used instead of a large vision transformer on a CPU-only laptop.
-- How the same architecture could later be upgraded with CLIP or other vision-language encoders.
-- How to compare text-only, image-only, and fused models fairly.
+Notebook 03 prints the comparison table and writes it to `models/metrics.json`; the app shows the same table,
+a bar chart and the confusion matrix. Numbers depend on your split and library versions, so I do not
+hard-code them here.
 
-## Profiles
+## Design choices and limitations
 
-**GitHub:** https://github.com/InfinitePraveen  
-**LinkedIn:** https://www.linkedin.com/in/infinitepraveen/
+* **Why TF-IDF and not BERT / CLIP?** Both are much bigger downloads and slow on a CPU. TF-IDF + a frozen small CNN is
+  a fair baseline that anyone can rerun. Swapping in sentence embeddings or CLIP features would only change the
+  feature step; the fusion code stays the same.
+* **Macro-F1 next to accuracy** because the neutral class is small.
+* MVSA-Single has one annotator per tweet, so labels are noisy, and the dataset is small. Expect modest scores.
+* An ImageNet CNN recognises objects, not moods; sarcasm and text embedded in images are not handled.
+* The label mapping (0 = positive, 1 = negative, 2 = neutral) in notebook 01 was inferred from the data, see the note there.
+* The model bundle is a joblib file, so use the same scikit-learn version for the notebooks and the app.
 
-## License
+## Author
 
-This project is intended for educational and portfolio use.
+Praveen - [GitHub](https://github.com/InfinitePraveen) - [LinkedIn](https://www.linkedin.com/in/infinitepraveen)
+
+Contributions are welcome, see [CONTRIBUTE.md](CONTRIBUTE.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+Code is under the MIT licence; the dataset keeps its own terms.
